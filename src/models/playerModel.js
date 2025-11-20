@@ -1,0 +1,28 @@
+const mongoose = require("mongoose");
+
+const playerSchema = new mongoose.Schema(
+  {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    roomId: { type: mongoose.Schema.Types.ObjectId, ref: "Room", required: true },
+
+    socketId: { type: String, required: true },
+
+    role: {
+      type: String,
+      enum: ["crewmate", "imposter"],
+      default: "crewmate",
+    },
+
+    alive: { type: Boolean, default: true },
+
+    position: {
+      x: { type: Number, default: 0 },
+      y: { type: Number, default: 0 },
+    },
+
+    tasksCompleted: { type: Number, default: 0 },
+  },
+  { timestamps: true }
+);
+
+module.exports = mongoose.model("Player", playerSchema);
