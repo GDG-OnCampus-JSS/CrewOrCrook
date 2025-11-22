@@ -1,6 +1,6 @@
-const express = require("express");
+import express from "express";
 const router = express.Router();
-const { createRoom, getRoomByCode } = require("../services/roomService");
+import { createRoom, getRoomByCode } from "../services/roomService.js";
 
 // POST /api/rooms
 router.post("/", async (req, res) => {
@@ -30,4 +30,4 @@ router.get("/:code", async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

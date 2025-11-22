@@ -1,23 +1,22 @@
-const Room = require("../models/roomModel");
-const { addPlayerToRoom, getRoomByCode } = require("../services/roomService");
+import { createRoom, getRoomByCode, addPlayerToRoom } from "../services/roomService.js";
 
 // lobby event handling
-module.exports = function lobbySocket(io, socket) {
+export default function lobbySocket(io, socket) {
   console.log("Lobby socket ready for:", socket.id);
 
   // room creation
   socket.on("lobby:create-room", async (payload, callback) => {
     try {
       const { hostUserId, maxPlayers, imposters } = payload || {};
-      if (!hostUserId) return callback?.({ ok: false, message: "hostUserId required" });
+      if (!hostUserId)
+        return callback?.({ ok: false, message: "hostUserId required" });
 
-      const room = await require("../services/roomService").createRoom(
-        hostUserId,
-        { maxPlayers, imposters }
-      );
+      const room = await createRoom(hostUserId, {
+        maxPlayers,
+        imposters,
+      });
 
       callback?.({ ok: true, room });
-
     } catch (err) {
       console.error("lobby:create-room error", err);
       callback?.({ ok: false, message: "server error" });
@@ -29,7 +28,10 @@ module.exports = function lobbySocket(io, socket) {
     try {
       const { roomCode, userId } = payload || {};
       if (!roomCode || !userId) {
-        return callback?.({ ok: false, message: "roomCode and userId required" });
+        return callback?.({
+          ok: false,
+          message: "roomCode and userId required",
+        });
       }
 
       const room = await getRoomByCode(roomCode);
@@ -54,12 +56,11 @@ module.exports = function lobbySocket(io, socket) {
       });
 
       callback?.({ ok: true, roomCode: room.code, player });
-
     } catch (err) {
       console.error("lobby:join-room error", err);
       callback?.({ ok: false, message: "server error" });
     }
   });
 
-  // more logic will be added later or you can contribute too sir
-};
+  // more logic soon...
+}

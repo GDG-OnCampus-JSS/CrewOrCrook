@@ -1,8 +1,8 @@
-const Room = require("../models/roomModel");
-const Player = require("../models/playerModel");
-const { generateRoomCode } = require("../utils/helper");
+import Room from"../models/roomModel.js";
+import Player from "../models/playerModel.js";
+import generateRoomCode from "../utils/helper.js";
 
-async function createRoom(hostUserId, options = {}) {
+export async function createRoom(hostUserId, options = {}) {
   const code = generateRoomCode();
   const room = await Room.create({
     code,
@@ -13,11 +13,11 @@ async function createRoom(hostUserId, options = {}) {
   return room;
 }
 
-async function getRoomByCode(code) {
+export async function getRoomByCode(code) {
   return Room.findOne({ code }).populate("players");
 }
 
-async function addPlayerToRoom({ roomId, userId, socketId, role = "crewmate" }) {
+export async function addPlayerToRoom({ roomId, userId, socketId, role = "crewmate" }) {
   const player = await Player.create({
     roomId,
     userId,
@@ -31,9 +31,3 @@ async function addPlayerToRoom({ roomId, userId, socketId, role = "crewmate" }) 
 
   return player;
 }
-
-module.exports = {
-  createRoom,
-  getRoomByCode,
-  addPlayerToRoom,
-};

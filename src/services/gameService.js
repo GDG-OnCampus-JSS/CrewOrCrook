@@ -11,7 +11,7 @@ async function handleKillEvent({ killerId, victimId, roomId }) {
   console.log("handleKillEvent", killerId, victimId, roomId);
 }
 
-module.exports = {
+export default {
   handlePlayerMove,
   handleKillEvent,
 };

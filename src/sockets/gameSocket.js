@@ -1,7 +1,8 @@
-const { handlePlayerMove, handleKillEvent } = require("../services/gameService");
+import gameService from "../services/gameService.js";
+const { handlePlayerMove, handleKillEvent } = gameService;
 
 //in-game events 
-module.exports = function gameSocket(io, socket) {
+export default function gameSocket(io, socket) {
   console.log("Game socket ready for:", socket.id);
 
   socket.on("game:move", async (payload) => {
