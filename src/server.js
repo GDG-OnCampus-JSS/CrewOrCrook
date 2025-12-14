@@ -10,6 +10,10 @@ import gameSocketHandler from "./sockets/gameSocket.js";
 
 import userRoutes from "./routes/userRoutes.js";
 import roomRoutes from "./routes/roomRoutes.js";
+import authRoutes from './routes/authRoutes.js';
+import refreshRoutes from './routes/refreshRoute.js';
+import cookieParser from "cookie-parser";
+import authMiddleware from "./middleware/authMiddleware.js";
 
 dotenv.config();
 
@@ -25,18 +29,25 @@ const io = new Server(server, {
 // middleware
 app.use(cors());
 app.use(express.json());
+app.use(cookieParser());
 
 // routes for user and room
 app.use("/api/users", userRoutes);
 app.use("/api/rooms", roomRoutes);
+app.use("/auth", authRoutes);
+app.use("/auth", refreshRoutes);
 
 app.get("/", (req, res) => {
   res.send("CrewOrCrook backend is running");
 });
 
+app.get("/protected", authMiddleware, (req, res) => {
+  res.json({ ok: true, user: req.user});
+});
+
 // socket logic
 io.on("connection", (socket) => {
-  console.log("🔌 New socket connected:", socket.id);
+  console.log("New socket connected:", socket.id);
 
   lobbySocketHandler(io, socket);
   gameSocketHandler(io, socket);
