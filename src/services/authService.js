@@ -4,14 +4,15 @@ import { generateAccessToken, generateRefreshToken } from '../utils/token.js';
 
 const SALT_ROUNDS = 10;
 
+//register new user through this function
 export const register = async({ username, password, email, zealId, rollNo, section, avatar }) => {
-    if(!username || !password || !zealId || !section) {
-        console.log("Some fields are missing");
+    if(!username || !password) {
         throw new Error("Missing required fields");
     }
 
-    const existing = await User.findOne({ username});
+    const existing = await User.findOne({ username });
     if(existing) {
+        console.log("User already exists");
         const err = new Error("User already exists");
         err.status = 400;
         throw err;
@@ -39,6 +40,7 @@ export const register = async({ username, password, email, zealId, rollNo, secti
     };
 }
 
+//user login function
 export const login = async ({ username, password }) => {
     if(!username || !password) {
         const err = new Error("Missing credentials");
@@ -73,4 +75,37 @@ export const login = async ({ username, password }) => {
         accessToken,
         refreshToken
     };
+};
+
+//setup for additional details from user
+export const setup = async (userId, { email, zealId, rollNo, section, avatar }) => {
+  if (!email || !zealId || !rollNo || !section || !avatar) {
+    const err = new Error("Some fields are missing");
+    err.status = 400;
+    throw err;
+  }
+
+  const updatedUser = await User.findByIdAndUpdate(
+    userId,
+   {
+    email,
+    zealId,
+    rollNo,
+    section,
+    avatar
+   },
+   { new: true }
+   );
+
+if (!updatedUser) {
+  const err = new Error("User not found");
+  err.status = 404;
+  throw err;
+}
+
+return {
+  message: "Setup completed successfully",
+  user: updatedUser,
+};
+
 };

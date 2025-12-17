@@ -1,4 +1,4 @@
-// logic for room code generation, will use later soemwhere
+// logic for room code generation
 export default function generateRoomCode(length = 6) {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   let code = "";
