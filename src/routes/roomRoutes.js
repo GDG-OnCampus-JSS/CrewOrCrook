@@ -2,11 +2,16 @@ import express from "express";
 const router = express.Router();
 import { createRoom, getRoomByCode } from "../services/roomService.js";
 
-// POST /api/rooms
-router.post("/", async (req, res) => {
+//crete a new room by host
+router.post("/createNew", async (req, res) => {
   try {
+    if (!req.body) {
+    return res.status(400).json({ error: "Request body missing" });
+    }
+
     const { hostUserId, maxPlayers, imposters } = req.body;
     if (!hostUserId) {
+      console.log("HostId is missing");
       return res.status(400).json({ message: "hostUserId is required" });
     }
 
@@ -18,7 +23,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-// GET /api/rooms/:code
+//join existing room
 router.get("/:code", async (req, res) => {
   try {
     const room = await getRoomByCode(req.params.code);
