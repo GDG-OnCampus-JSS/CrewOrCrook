@@ -7,7 +7,7 @@ const userSchema = new mongoose.Schema(
     zealId: {type: String},
     rollNo: {type: String},
     section: {type: String},
-    email: {type: String}
+    email: {type: String, unique: true}
   },
   { timestamps: true }
 );

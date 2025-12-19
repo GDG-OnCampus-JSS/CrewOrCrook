@@ -2,6 +2,7 @@ import Room from"../models/roomModel.js";
 import Player from "../models/playerModel.js";
 import generateRoomCode from "../utils/helper.js";
 
+//creating new room
 export async function createRoom(hostUserId, options = {}) {
   const code = generateRoomCode();
   const room = await Room.create({
@@ -13,10 +14,14 @@ export async function createRoom(hostUserId, options = {}) {
   return room;
 }
 
+
+//join player
 export async function getRoomByCode(code) {
   return Room.findOne({ code }).populate("players");
 }
 
+
+//join player
 export async function addPlayerToRoom({ roomId, userId, socketId, role = "crewmate" }) {
   const player = await Player.create({
     roomId,
