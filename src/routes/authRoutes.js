@@ -33,11 +33,8 @@ router.post("/login", async(req, res) => {
 });
 
 router.post("/setup", authMiddleware, async (req, res) => {
-  console.log("req.user:", req.user);
-  console.log("typeof userId:", typeof req.user?.id);
 
-  const userId = req.user.id; // or userId — see next step
-  console.log("SETUP userId:", userId);
+  const userId = req.user.id;
 
   const result = await authService.setup(userId, req.body);
   res.json(result);

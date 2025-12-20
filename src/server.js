@@ -49,10 +49,11 @@ app.use("/room", roomRoutes);
 app.use("/auth", authRoutes);
 app.use("/reAuth", refreshRoutes);
 
+
+//for testing normal and protected route
 app.get("/", (req, res) => {
   res.send("CrewOrCrook backend is running");
 });
-
 app.get("/protected", authMiddleware, (req, res) => {
   res.json({ ok: true, user: req.user });
 });
