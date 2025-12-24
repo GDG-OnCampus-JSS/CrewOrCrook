@@ -44,7 +44,7 @@ router.post("/:code/join", authMiddleware, async (req, res) => {
       return res.status(404).json({ message: "Room not found" });
     }
 
-    if (room.status !== "lobby") {
+    if (room.gameState !== "lobby") {
       return res.status(400).json({ message: "Game already started" });
     }
 

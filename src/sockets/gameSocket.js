@@ -1,32 +1,29 @@
-import gameService from "../services/gameService.js";
-const { handlePlayerMove, handleKillEvent } = gameService;
 
-//in-game events 
-export default function gameSocket(io, socket) {
-  console.log("Game socket ready for:", socket.id);
+export default function gameSocketHandler(io, socket) {
+  console.log("Game socket ready:", socket.id);
 
-  socket.on("game:move", async (payload) => {
-    try {
-      await handlePlayerMove(payload);
-      if (!payload?.roomCode) return;
-      io.to(payload.roomCode).emit("game:player-moved", {
-        playerId: payload.playerId,
-        position: payload.position,
-      });
-    } catch (err) {
-      console.error("game:move error", err);
-    }
+  // Player movement
+  socket.on("game:move", ({ roomCode, playerId, position }) => {
+    if (!roomCode || !playerId || !position) return;
+
+
+    io.to(roomCode).emit("game:player-moved", {
+      playerId,
+      position,
+    });
   });
 
-  socket.on("game:kill", async (payload) => {
-    try {
-      await handleKillEvent(payload);
-      if (!payload?.roomCode) return;
-      io.to(payload.roomCode).emit("game:kill-event", payload);
-    } catch (err) {
-      console.error("game:kill error", err);
-    }
+  
+  // kill logic
+  socket.on("game:kill", ({ roomCode, killerId, victimId }) => {
+    if (!roomCode || !killerId || !victimId) return;
+
+   
+    io.to(roomCode).emit("game:kill-event", {
+      killerId,
+      victimId,
+    });
   });
 
-  // report body, meetings, vote, tasks
-};
+  // meetings, votes, tasks will follow same pattern, i will do it later
+}

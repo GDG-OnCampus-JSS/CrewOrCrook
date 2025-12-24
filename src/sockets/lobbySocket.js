@@ -1,66 +1,68 @@
-import { createRoom, getRoomByCode, addPlayerToRoom } from "../services/roomService.js";
+import { getRoomByCode } from "../services/roomService.js";
+import Player from "../models/playerModel.js";
 
-// lobby event handling
-export default function lobbySocket(io, socket) {
-  console.log("Lobby socket ready for:", socket.id);
+export default function lobbySocketHandler(io, socket) {
+  console.log("Lobby socket ready:", socket.id);
 
-  // room creation
-  socket.on("lobby:create-room", async (payload, callback) => {
+  //Join lobby socket room
+  socket.on("lobby:join-room", async ({ roomCode }, callback) => {
     try {
-      const { hostUserId, maxPlayers, imposters } = payload || {};
-      if (!hostUserId)
-        return callback?.({ ok: false, message: "hostUserId required" });
+      const userId = socket.user.id;
 
-      const room = await createRoom(hostUserId, {
-        maxPlayers,
-        imposters,
-      });
-
-      callback?.({ ok: true, room });
-    } catch (err) {
-      console.error("lobby:create-room error", err);
-      callback?.({ ok: false, message: "server error" });
-    }
-  });
-
-  // adding in room
-  socket.on("lobby:join-room", async (payload, callback) => {
-    try {
-      const { roomCode, userId } = payload || {};
-      if (!roomCode || !userId) {
-        return callback?.({
-          ok: false,
-          message: "roomCode and userId required",
-        });
+      if (!roomCode) {
+        return callback?.({ ok: false, message: "roomCode required" });
       }
 
       const room = await getRoomByCode(roomCode);
-      if (!room) return callback?.({ ok: false, message: "Room not found" });
-
-      if (room.players.length >= room.maxPlayers) {
-        return callback?.({ ok: false, message: "Room full" });
+      if (!room) {
+        return callback?.({ ok: false, message: "Room not found" });
       }
 
-      const player = await addPlayerToRoom({
+      if (room.status !== "lobby") {
+        return callback?.({ ok: false, message: "Game already started" });
+      }
+
+      const player = await Player.findOne({
         roomId: room._id,
         userId,
-        socketId: socket.id,
       });
 
-      socket.join(room.code);
+      if (!player) {
+        return callback?.({
+          ok: false,
+          message: "Player not registered for this room",
+        });
+      }
 
-      io.to(room.code).emit("room:player-joined", {
-        roomCode: room.code,
-        playerId: player._id,
-        userId: player.userId,
+      player.socketId = socket.id;
+      await player.save();
+
+      socket.join(roomCode);
+
+      socket.to(roomCode).emit("lobby:player-joined", {
+        userId,
       });
 
-      callback?.({ ok: true, roomCode: room.code, player });
+      console.log(
+        `User ${userId} joined lobby ${roomCode} via socket ${socket.id}`
+      );
+
+      callback?.({ ok: true, roomCode });
     } catch (err) {
       console.error("lobby:join-room error", err);
-      callback?.({ ok: false, message: "server error" });
+      callback?.({ ok: false, message: "Server error" });
     }
   });
 
-  // more logic soon...
+  //Handle disconnect for lobby
+  socket.on("disconnect", async () => {
+    try {
+      await Player.findOneAndUpdate(
+        { socketId: socket.id },
+        { socketId: null }
+      );
+    } catch (err) {
+      console.error("Lobby disconnect cleanup error", err);
+    }
+  });
 }
