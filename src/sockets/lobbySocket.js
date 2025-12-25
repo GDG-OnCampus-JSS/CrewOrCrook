@@ -40,7 +40,8 @@ export default function lobbySocketHandler(io, socket) {
       socket.join(roomCode);
 
       socket.to(roomCode).emit("lobby:player-joined", {
-        userId,
+        user: userId,
+        playerId: player._id
       });
 
       console.log(
