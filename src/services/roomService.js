@@ -16,7 +16,7 @@ export async function createRoom(hostUserId) {
 }
 
 
-//join player
+//get room - player
 export async function getRoomByCode(code) {
   return Room.findOne({ code }).populate("players");
 }
