@@ -6,7 +6,10 @@ export default function gameSocketHandler(io, socket) {
     try {
       const { roomCode, playerId, position } = payload || {};
 
-      if (!roomCode || !playerId || !position) return;
+      if (!roomCode || !playerId || !position) {
+        console.error("some fields are missing while socket: move action")
+        return;
+      }
 
       io.to(roomCode).emit("game:player-moved", {
         playerId,
@@ -23,7 +26,10 @@ export default function gameSocketHandler(io, socket) {
     try {
       const { roomCode, killerId, victimId } = payload || {};
 
-      if (!roomCode || !killerId || !victimId) return;
+      if (!roomCode || !killerId || !victimId) {
+        console.error("some fields are missing while socket kill event")
+        return;
+      };
 
       io.to(roomCode).emit("game:kill-event", {
         killerId,
