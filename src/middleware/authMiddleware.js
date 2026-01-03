@@ -10,6 +10,6 @@ export default (req, res, next ) => {
         req.user = payload;
         next();
     } catch (err) {
-        return res.status(401).json({ error: "Invalid or expired Token"});
+        return res.status(401).json({ error: "Invalid or expired Authorization Header Token"});
     }
 };

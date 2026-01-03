@@ -90,6 +90,14 @@ io.use((socket, next) => {
   }
 });
 
+//redis temporary check
+import redisClient from "./redis/redisClient.js";
+
+await redisClient.set("test:key", "hello");
+const val = await redisClient.get("test:key");
+console.log("Redis test value:", val);
+
+
 
 
 //SOCKET LOGIC
