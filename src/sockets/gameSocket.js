@@ -1,13 +1,13 @@
 import Room from "../models/roomModel.js";
 import Player from "../models/playerModel.js";
 import { assignImposter } from "../utils/assignImposter.js";
-import { initGameState } from "../services/gameStateService.js";
+import { initGameState, updatePlayerPosition, killPlayer } from "../services/gameStateService.js";
 
 export default function gameSocketHandler(io, socket) {
   console.log("Game socket ready:", socket.id);
 
   // Player movement
-  socket.on("game:move", (payload) => {
+  socket.on("game:move", async (payload) => {
     try {
       const { roomCode, position } = payload || {};
       const userId = socket.user.id;
@@ -17,17 +17,19 @@ export default function gameSocketHandler(io, socket) {
         return;
       }
 
+      await updatePlayerPosition(roomCode, userId, position);
+
       io.to(roomCode).emit("game:player-moved", {
         userId,
         position,
       });
     } catch (err) {
-      console.error("game:move error:", err);
+      console.error("game:move error:", err.message);
     }
   });
 
   // kill logic
-  socket.on("game:kill", (payload) => {
+  socket.on("game:kill", async (payload) => {
     try {
       const { roomCode, victimId } = payload || {};
       const killerId = socket.user.id;
@@ -37,12 +39,14 @@ export default function gameSocketHandler(io, socket) {
         return;
       }
 
+      await killPlayer(roomCode, killerId, victimId);
+
       io.to(roomCode).emit("game:kill-event", {
         killerId,
         victimId,
       });
     } catch (err) {
-      console.error("game:kill error:", err);
+      console.error("game:kill error:", err.message);
     }
   });
 
