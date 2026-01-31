@@ -12,7 +12,7 @@ const roomSchema = new mongoose.Schema(
 
     gameState: {
       type: String,
-      enum: ["lobby", "in-game", "meeting", "finished"],
+      enum: ["lobby", "started", "in-game", "meeting", "finished"],
       default: "lobby",
     },
 

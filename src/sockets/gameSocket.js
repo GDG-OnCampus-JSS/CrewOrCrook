@@ -1,7 +1,7 @@
 import Room from "../models/roomModel.js";
 import Player from "../models/playerModel.js";
 import { assignImposter } from "../utils/assignImposter.js";
-import { initGameState, updatePlayerPosition, killPlayer } from "../services/gameStateService.js";
+import { deleteGameState, setPhase, getPhase, initGameState, updatePlayerPosition, killPlayer } from "../services/gameStateService.js";
 
 export default function gameSocketHandler(io, socket) {
   console.log("Game socket ready:", socket.id);
@@ -39,12 +39,27 @@ export default function gameSocketHandler(io, socket) {
         return;
       }
 
-      await killPlayer(roomCode, killerId, victimId);
+      const result = await killPlayer(roomCode, killerId, victimId);
 
       io.to(roomCode).emit("game:kill-event", {
         killerId,
         victimId,
       });
+
+      if (result?.ended) {
+        io.to(roomCode).emit("game:ended", {
+          winner: result.winner,
+        });
+
+        // CLEANUP
+        await deleteGameState(roomCode);
+        await Room.findOneAndUpdate(
+          { code: roomCode },
+          { status: "ended" }
+        );
+      }
+
+
     } catch (err) {
       console.error("game:kill error:", err.message);
     }
@@ -66,7 +81,7 @@ export default function gameSocketHandler(io, socket) {
         return callback?.({ ok: false, message: "Room not found" });
       }
 
-      if (room.status !== "lobby") {
+      if (room.gameState !== "lobby") {
         return callback?.({ ok: false, message: "Game already started" });
       }
 
@@ -81,7 +96,7 @@ export default function gameSocketHandler(io, socket) {
 
       await assignImposter(room._id);
 
-      room.status = "started";
+      room.gameState = "started";
       await room.save();
 
       const updatedPlayers = await Player.find({ roomId: room._id });
@@ -100,6 +115,46 @@ export default function gameSocketHandler(io, socket) {
       callback?.({ ok: true });
     } catch (err) {
       console.error("game:start error", err);
+      callback?.({ ok: false, message: "Server error" });
+    }
+  });
+
+  // REPORT BODY
+  socket.on("game:report-body", async ({ roomCode }, callback) => {
+    try {
+      if (!roomCode) return callback?.({ ok: false, message: "roomCode required" });
+
+      const phase = await getPhase(roomCode);
+      if (phase !== "freeplay") {
+        return callback?.({ ok: false, message: "Meeting not allowed now" });
+      }
+
+      await setPhase(roomCode, "meeting");
+
+      io.to(roomCode).emit("game:meeting-started");
+      callback?.({ ok: true });
+    } catch (err) {
+      console.error("game:report-body error", err);
+      callback?.({ ok: false, message: "Server error" });
+    }
+  });
+
+  // EMERGENCY MEETING
+  socket.on("game:emergency-meeting", async ({ roomCode }, callback) => {
+    try {
+      if (!roomCode) return callback?.({ ok: false, message: "roomCode required" });
+
+      const phase = await getPhase(roomCode);
+      if (phase !== "freeplay") {
+        return callback?.({ ok: false, message: "Meeting not allowed now" });
+      }
+
+      await setPhase(roomCode, "meeting");
+
+      io.to(roomCode).emit("game:meeting-started");
+      callback?.({ ok: true });
+    } catch (err) {
+      console.error("game:emergency-meeting error", err);
       callback?.({ ok: false, message: "Server error" });
     }
   });

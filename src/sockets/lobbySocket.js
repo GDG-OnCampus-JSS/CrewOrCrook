@@ -18,7 +18,7 @@ export default function lobbySocketHandler(io, socket) {
         return callback?.({ ok: false, message: "Room not found" });
       }
 
-      if (room.status !== "lobby") {
+      if (room.gameState !== "lobby") {
         return callback?.({ ok: false, message: "Game already started" });
       }
 

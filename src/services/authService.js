@@ -67,11 +67,7 @@ export const login = async ({ username, password }) => {
     const refreshToken = generateRefreshToken(payload);
 
     return {
-        user: {
-            id: user._id,
-            username: user.username,
-            email: user.email
-        },
+        user,
         accessToken,
         refreshToken
     };
