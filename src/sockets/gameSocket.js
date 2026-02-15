@@ -1,7 +1,21 @@
 import Room from "../models/roomModel.js";
 import Player from "../models/playerModel.js";
 import { assignImposter } from "../utils/assignImposter.js";
-import { deleteGameState, setPhase, getPhase, initGameState, updatePlayerPosition, killPlayer } from "../services/gameStateService.js";
+import {
+  deleteGameState,
+  setPhase,
+  getPhase,
+  initGameState,
+  updatePlayerPosition,
+  killPlayer,
+  registerVote,
+  resolveVoting,
+  getGameStateSafe,
+  haveAllVoted,
+  addMeetingMessage,
+  getMeetingMessages
+} from "../services/gameStateService.js";
+
 
 export default function gameSocketHandler(io, socket) {
   console.log("Game socket ready:", socket.id);
@@ -158,4 +172,110 @@ export default function gameSocketHandler(io, socket) {
       callback?.({ ok: false, message: "Server error" });
     }
   });
+
+// VOTE
+socket.on("game:vote", async ({ roomCode, targetId }, callback) => {
+  try {
+    const voterId = socket.user.id;
+
+    if (!roomCode) {
+      return callback?.({ ok: false, message: "roomCode required" });
+    }
+
+    await registerVote(roomCode, voterId, targetId);
+
+    const state = await getGameStateSafe(roomCode);
+
+    io.to(roomCode).emit("game:vote-update", {
+      voterId,
+      targetId
+    });
+
+    // Auto resolve if all voted
+    if (haveAllVoted(state)) {
+      const result = await resolveVoting(roomCode);
+
+      io.to(roomCode).emit("game:vote-result", result);
+
+      if (result.winner) {
+        io.to(roomCode).emit("game:ended", {
+          winner: result.winner
+        });
+      } else {
+        io.to(roomCode).emit("game:freeplay-resumed");
+      }
+    }
+
+    callback?.({ ok: true });
+  } catch (err) {
+    console.error("game:vote error", err);
+    callback?.({ ok: false, message: err.message });
+  }
+});
+
+// HOST FORCE RESOLVE VOTES
+socket.on("game:resolve-votes", async ({ roomCode }, callback) => {
+  try {
+    if (!roomCode) {
+      return callback?.({ ok: false, message: "roomCode required" });
+    }
+
+    const result = await resolveVoting(roomCode);
+
+    io.to(roomCode).emit("game:vote-result", result);
+
+    if (result.winner) {
+      io.to(roomCode).emit("game:ended", {
+        winner: result.winner
+      });
+    } else {
+      io.to(roomCode).emit("game:freeplay-resumed");
+    }
+
+    callback?.({ ok: true });
+  } catch (err) {
+    console.error("resolve-votes error", err);
+    callback?.({ ok: false, message: err.message });
+  }
+});
+
+// MEETING CHAT
+socket.on("game:chat", async ({ roomCode, message }, callback) => {
+  try {
+    const userId = socket.user.id;
+
+    if (!roomCode) {
+      return callback?.({ ok: false, message: "roomCode required" });
+    }
+
+    // ensure socket is actually in the room
+    if (!socket.rooms.has(roomCode)) {
+      return callback?.({ ok: false, message: "Not in this room" });
+    }
+
+    const msg = await addMeetingMessage(roomCode, userId, message);
+
+    io.to(roomCode).emit("game:chat-message", msg);
+
+    callback?.({ ok: true });
+  } catch (err) {
+    console.error("game:chat error", err.message);
+    callback?.({ ok: false, message: err.message });
+  }
+});
+
+socket.on("game:chat-history", async ({ roomCode }, callback) => {
+  try {
+    if (!roomCode) {
+      return callback?.({ ok: false, message: "roomCode required" });
+    }
+
+    const history = await getMeetingMessages(roomCode);
+    callback?.({ ok: true, history });
+  } catch (err) {
+    console.error("chat-history error", err.message);
+    callback?.({ ok: false, message: err.message });
+  }
+});
+
 }
