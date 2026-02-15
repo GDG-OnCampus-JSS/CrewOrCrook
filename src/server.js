@@ -1,10 +1,10 @@
+import dotenv from "dotenv";
 import jwt from "jsonwebtoken";
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import mongoose from "mongoose";
 import cors from "cors";
-import dotenv from "dotenv";
 
 import lobbySocketHandler from "./sockets/lobbySocket.js";
 import gameSocketHandler from "./sockets/gameSocket.js";
@@ -35,7 +35,7 @@ const io = new Server(server, {
 // middleware
 app.use(
   cors({
-    origin: CLIENT_ORIGIN,
+    origin: "*",
     credentials: true,
   })
 );
@@ -52,12 +52,11 @@ app.use("/reAuth", refreshRoutes);
 
 //for testing normal and protected route
 app.get("/", (req, res) => {
-  res.send("CrewOrCrook backend is running");
+  res.json({ok: true, message: "CrewOrCrook backend is running"});
 });
 app.get("/protected", authMiddleware, (req, res) => {
   res.json({ ok: true, user: req.user });
 });
-
 
 
 //GLOBAL ERROR HANDLER
@@ -67,23 +66,16 @@ app.use((err, req, res, next) => {
 });
 
 
-
-
-
 //SOCKET AUTH MIDDLEWARE
 
 io.use((socket, next) => {
   try {
     const token = socket.handshake.auth?.token;
-
     if (!token) {
       return next(new Error("No token provided"));
     }
-
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
     socket.user = decoded;
-
     next();
   } catch (err) {
     next(new Error("Invalid token"));
@@ -96,8 +88,6 @@ import redisClient from "./redis/redisClient.js";
 await redisClient.set("test:key", "hello");
 const val = await redisClient.get("test:key");
 console.log("Redis test value:", val);
-
-
 
 
 //SOCKET LOGIC
@@ -116,9 +106,6 @@ io.on("connection", (socket) => {
     );
   });
 });
-
-
-
 
 
 //SERVER + DB START

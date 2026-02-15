@@ -6,7 +6,6 @@ import authMiddleware from "../middleware/authMiddleware.js";
 // crete a new room by host
 router.post("/createNew", authMiddleware, async (req, res) => {
   try {
-    console.log("trying...");
     const hostUserId = req.user.id;
 
     const room = await createRoom(hostUserId);

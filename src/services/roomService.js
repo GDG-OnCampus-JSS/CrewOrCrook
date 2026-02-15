@@ -24,8 +24,6 @@ export async function getRoomByCode(code) {
 
 //join player
 export async function addPlayerToRoom({ room, userId, socketId, role = "crewmate" }) {
-
-
   const player = await Player.create({
     roomId: room._id,
     userId,
