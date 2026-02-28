@@ -17,7 +17,7 @@ router.post("/createNew", authMiddleware, async (req, res) => {
 });
 
 // lookup for existing room
-router.get("/:code/lookup", async (req, res) => {
+router.get("/:code/lookup", authMiddleware, async (req, res) => {
   try {
     const code = req.params.code;
 

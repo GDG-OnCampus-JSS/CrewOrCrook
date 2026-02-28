@@ -123,7 +123,7 @@ export async function initGameState(roomCode, players) {
     players: {},
 
     tasks: {
-      total: 0,
+      total: 30,
       completed: 0,
       perPlayer: {}
     },
@@ -164,6 +164,40 @@ export async function initGameState(roomCode, players) {
   );
 
   return state;
+}
+
+export async function incrementTask(roomCode, userId) {
+  const state = await getGameStateSafe(roomCode);
+
+  if (state.phase !== "freeplay") {
+    throw new Error("Tasks only allowed during freeplay");
+  }
+
+  const player = state.players[userId];
+  if (!player || !player.alive) {
+    throw new Error("Invalid player");
+  }
+
+  if (player.role === "imposter") {
+    throw new Error("Imposters cannot complete tasks");
+  }
+
+  // increment global counter
+  state.tasks.completed += 1;
+
+  // increment per-player counter (optional hai ye)
+  state.tasks.perPlayer[userId] += 1;
+
+  const done = state.tasks.completed;
+  const total = state.tasks.total;
+
+  await saveGameState(roomCode, state);
+
+  return {
+    done,
+    total,
+    winner: done >= total
+  };
 }
 
 export async function getGameState(roomCode) {
