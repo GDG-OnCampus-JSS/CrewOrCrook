@@ -51,7 +51,7 @@ app.use("/auth", authRoutes);
 app.use("/reAuth", refreshRoutes);
 
 
-//for testing normal and protected route
+//normal and protected route for testing
 app.get("/", (req, res) => {
   res.json({ok: true, message: "CrewOrCrook backend is running"});
 });

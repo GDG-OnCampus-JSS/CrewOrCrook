@@ -13,7 +13,8 @@ import {
   getGameStateSafe,
   haveAllVoted,
   addMeetingMessage,
-  getMeetingMessages
+  getMeetingMessages,
+  incrementTask
 } from "../services/gameStateService.js";
 
 
@@ -78,8 +79,6 @@ export default function gameSocketHandler(io, socket) {
       console.error("game:kill error:", err.message);
     }
   });
-
-  // meetings, votes, tasks will follow same pattern, i will do it later
 
   // HOST STARTS GAME
   socket.on("game:start", async ({ roomCode }, callback) => {
@@ -277,5 +276,40 @@ socket.on("game:chat-history", async ({ roomCode }, callback) => {
     callback?.({ ok: false, message: err.message });
   }
 });
+
+socket.on("game:task-complete", async ({ roomCode }, callback) => {
+  try {
+    const userId = socket.user.id;
+
+    const result = await incrementTask(roomCode, userId);
+
+    io.to(roomCode).emit("game:task-progress", {
+      completed: result.done,
+      total: result.total
+    });
+
+    if (result.winner) {
+      io.to(roomCode).emit("game:ended", {
+        winner: "crewmates"
+      });
+    }
+
+    callback?.({ ok: true });
+  } catch (err) {
+    console.log(err)
+    callback?.({ ok: false, message: err.message });
+  }
+});
+
+socket.on("disconnect", async() => {
+  console.log("disconnect route called");
+  try{
+    
+    const roomId = Player.findOne(socket.user.Id);
+    console.log(roomId);
+  } catch (err) {
+    console.error("❌",err, "❌");
+  }
+})
 
 }
