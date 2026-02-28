@@ -8,6 +8,7 @@ import cors from "cors";
 
 import lobbySocketHandler from "./sockets/lobbySocket.js";
 import gameSocketHandler from "./sockets/gameSocket.js";
+import { getGameState, resolveVoting, isTimerExpired } from "./services/gameStateService.js";
 
 import roomRoutes from "./routes/roomRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
@@ -106,6 +107,41 @@ io.on("connection", (socket) => {
     );
   });
 });
+
+// GAME TIMER LOOP
+setInterval(async () => {
+  try {
+    const keys = await redisClient.keys("game:*");
+
+    for (const key of keys) {
+      const roomCode = key.split(":")[1];
+      const state = await getGameState(roomCode);
+
+      if (!state) continue;
+
+      // Only care about meetings
+      if (state.phase === "meeting" && isTimerExpired(state, "meetingEndAt")) {
+
+        console.log(`Meeting timer expired for room ${roomCode}`);
+
+        const result = await resolveVoting(roomCode);
+
+        io.to(roomCode).emit("game:vote-result", result);
+
+        if (result.winner) {
+          io.to(roomCode).emit("game:ended", {
+            winner: result.winner
+          });
+        } else {
+          io.to(roomCode).emit("game:freeplay-resumed");
+        }
+      }
+    }
+
+  } catch (err) {
+    console.error("Timer loop error:", err.message);
+  }
+}, 3000); // every 3 seconds
 
 
 //SERVER + DB START
