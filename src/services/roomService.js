@@ -18,8 +18,6 @@ export async function createRoom(hostUserId) {
   const room = await Room.create({
     code,
     host: hostUserId,
-    /*maxPlayers: options.maxPlayers || 6,
-    imposters: options.imposters || 1,*/
   });
   return room;
 }
