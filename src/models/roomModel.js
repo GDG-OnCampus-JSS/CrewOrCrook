@@ -10,7 +10,7 @@ const roomSchema = new mongoose.Schema(
 
     maxPlayers: { type: Number, default: 6 },
 
-    gameState: {
+    state: {
       type: String,
       enum: ["lobby", "started", "in-game", "meeting", "finished"],
       default: "lobby",

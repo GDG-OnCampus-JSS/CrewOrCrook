@@ -45,7 +45,7 @@ export const register = async({ username, password, email, zealId, rollNo, secti
             email: user.email
         }
     };
-}
+};
 
 //user login function
 export const login = async ({ username, password }) => {

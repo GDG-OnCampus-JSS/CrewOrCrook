@@ -1,4 +1,5 @@
 import redisClient from "../redis/redisClient.js";
+import { GAME_STATE, PHASE, PLAYER_ROLE } from "../constants.js";
 
 const gameKey = (roomCode) => `game:${roomCode}`;
 
@@ -30,7 +31,7 @@ export async function updatePlayerPosition(roomCode, userId, position) {
 
   const state = JSON.parse(raw);
 
-  if (state.phase !== "freeplay") {
+  if (state.phase !== PHASE.FREEPLAY) {
     throw new Error("Movement not allowed in current phase");
   }
 
@@ -61,7 +62,7 @@ export async function killPlayer(roomCode, killerUserId, victimUserId) {
 
   const state = JSON.parse(raw);
 
-  if (state.phase !== "freeplay") {
+  if (state.phase !== PHASE.FREEPLAY) {
     throw new Error("Kill not allowed in current phase");
   }
 
@@ -80,7 +81,7 @@ export async function killPlayer(roomCode, killerUserId, victimUserId) {
     throw new Error("Dead player cannot kill");
   }
 
-  if (killer.role !== "imposter") {
+  if (killer.role !== PLAYER_ROLE.IMPOSTER) {
     throw new Error("Only imposter can kill");
   }
 
@@ -94,7 +95,7 @@ export async function killPlayer(roomCode, killerUserId, victimUserId) {
   const result = evaluateWinCondition(state);
 
   if (result.ended) {
-    state.phase = "ended";
+    state.phase = PHASE.ENDED;
     state.winner = result.winner;
 
     await redisClient.set(key, JSON.stringify(state));
@@ -117,8 +118,8 @@ export async function killPlayer(roomCode, killerUserId, victimUserId) {
 //Initialize game state 
 export async function initGameState(roomCode, players) {
   const state = {
-    status: "started",
-    phase: "freeplay",
+    state: GAME_STATE.STARTED,
+    phase: PHASE.FREEPLAY,
 
     players: {},
 
@@ -169,7 +170,7 @@ export async function initGameState(roomCode, players) {
 export async function incrementTask(roomCode, userId) {
   const state = await getGameStateSafe(roomCode);
 
-  if (state.phase !== "freeplay") {
+  if (state.phase !== PHASE.FREEPLAY) {
     throw new Error("Tasks only allowed during freeplay");
   }
 
@@ -178,7 +179,7 @@ export async function incrementTask(roomCode, userId) {
     throw new Error("Invalid player");
   }
 
-  if (player.role === "imposter") {
+  if (player.role === PLAYER_ROLE.IMPOSTER) {
     throw new Error("Imposters cannot complete tasks");
   }
 
@@ -238,7 +239,7 @@ export function evaluateWinCondition(state) {
   for (const player of Object.values(state.players)) {
     if (!player.alive) continue;
 
-    if (player.role === "imposter") {
+    if (player.role === PLAYER_ROLE.IMPOSTER) {
       aliveImposters++;
     } else {
       aliveCrew++;
@@ -246,11 +247,11 @@ export function evaluateWinCondition(state) {
   }
 
   if (aliveImposters === 0) {
-    return { ended: true, winner: "crewmates" };
+    return { ended: true, winner: PLAYER_ROLE.CREWMATE};
   }
 
   if (aliveImposters >= aliveCrew) {
-    return { ended: true, winner: "imposters" };
+    return { ended: true, winner: PLAYER_ROLE.IMPOSTER};
   }
 
   return { ended: false };
@@ -259,7 +260,7 @@ export function evaluateWinCondition(state) {
 export async function registerVote(roomCode, voterId, targetId) {
   const state = await getGameStateSafe(roomCode);
 
-  if (state.phase !== "meeting") {
+  if (state.phase !== PHASE.MEETING) {
     throw new Error("Voting not allowed outside meeting");
   }
 
@@ -325,11 +326,11 @@ export async function resolveVoting(roomCode) {
   }
 
   state.votes = {};
-  state.phase = "freeplay";
+  state.phase = PHASE.FREEPLAY;
 
   const winCheck = evaluateWinCondition(state);
   if (winCheck.ended) {
-    state.phase = "ended";
+    state.phase = PHASE.ENDED;
     state.winner = winCheck.winner;
   }
 
@@ -346,7 +347,7 @@ export async function resolveVoting(roomCode) {
 export async function addMeetingMessage(roomCode, userId, message) {
   const state = await getGameStateSafe(roomCode);
 
-  if (state.phase !== "meeting") {
+  if (state.phase !== PHASE.MEETING) {
     throw new Error("Chat allowed only during meeting");
   }
 
@@ -394,7 +395,7 @@ export async function endGame(roomCode, winner) {
 
   const state = JSON.parse(raw);
 
-  state.phase = "ended";
+  state.phase = PHASE.ENDED;
   state.winner = winner;
 
   await redisClient.set(key, JSON.stringify(state));

@@ -1,5 +1,6 @@
 import { getRoomByCode } from "../services/roomService.js";
 import Player from "../models/playerModel.js";
+import { GAME_STATE } from "../constants.js";
 
 export default function lobbySocketHandler(io, socket) {
   console.log("Lobby socket ready:", socket.id);
@@ -18,7 +19,7 @@ export default function lobbySocketHandler(io, socket) {
         return callback?.({ ok: false, message: "Room not found" });
       }
 
-      if (room.gameState !== "lobby") {
+      if (room.state !== GAME_STATE.LOBBY) {
         return callback?.({ ok: false, message: "Game already started" });
       }
 
