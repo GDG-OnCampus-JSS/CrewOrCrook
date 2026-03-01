@@ -1,6 +1,7 @@
 import Room from "../models/roomModel.js";
 import Player from "../models/playerModel.js";
 import { assignImposter } from "../utils/assignImposter.js";
+import { PHASE, GAME_STATE, PLAYER_ROLE } from "../constants.js";
 import {
   deleteGameState,
   setPhase,
@@ -70,7 +71,7 @@ export default function gameSocketHandler(io, socket) {
         await deleteGameState(roomCode);
         await Room.findOneAndUpdate(
           { code: roomCode },
-          { status: "ended" }
+          { state: GAME_STATE.FINISHED }
         );
       }
 
@@ -94,7 +95,7 @@ export default function gameSocketHandler(io, socket) {
         return callback?.({ ok: false, message: "Room not found" });
       }
 
-      if (room.gameState !== "lobby") {
+      if (room.state !== GAME_STATE.LOBBY) {
         return callback?.({ ok: false, message: "Game already started" });
       }
 
@@ -109,7 +110,7 @@ export default function gameSocketHandler(io, socket) {
 
       await assignImposter(room._id);
 
-      room.gameState = "started";
+      room.state = GAME_STATE.STARTED;
       await room.save();
 
       const updatedPlayers = await Player.find({ roomId: room._id });
@@ -138,11 +139,11 @@ export default function gameSocketHandler(io, socket) {
       if (!roomCode) return callback?.({ ok: false, message: "roomCode required" });
 
       const phase = await getPhase(roomCode);
-      if (phase !== "freeplay") {
+      if (phase !== PHASE.FREEPLAY) {
         return callback?.({ ok: false, message: "Meeting not allowed now" });
       }
 
-      await setPhase(roomCode, "meeting");
+      await setPhase(roomCode, PHASE.MEETING);
 
       io.to(roomCode).emit("game:meeting-started");
       callback?.({ ok: true });
@@ -158,11 +159,11 @@ export default function gameSocketHandler(io, socket) {
       if (!roomCode) return callback?.({ ok: false, message: "roomCode required" });
 
       const phase = await getPhase(roomCode);
-      if (phase !== "freeplay") {
+      if (phase !== PHASE.FREEPLAY) {
         return callback?.({ ok: false, message: "Meeting not allowed now" });
       }
 
-      await setPhase(roomCode, "meeting");
+      await setPhase(roomCode, PHASE.MEETING);
 
       io.to(roomCode).emit("game:meeting-started");
       callback?.({ ok: true });
@@ -290,7 +291,7 @@ socket.on("game:task-complete", async ({ roomCode }, callback) => {
 
     if (result.winner) {
       io.to(roomCode).emit("game:ended", {
-        winner: "crewmates"
+        winner: PLAYER_ROLE.CREWMATE
       });
     }
 
@@ -301,6 +302,7 @@ socket.on("game:task-complete", async ({ roomCode }, callback) => {
   }
 });
 
+//logic yet to build fully
 socket.on("disconnect", async() => {
   console.log("disconnect route called");
   try{

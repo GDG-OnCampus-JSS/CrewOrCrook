@@ -2,6 +2,8 @@ import express from "express";
 const router = express.Router();
 import { addPlayerToRoom, createRoom, getRoomByCode } from "../services/roomService.js";
 import authMiddleware from "../middleware/authMiddleware.js";
+import validateCode from '../middleware/validateCode.js';
+import { GAME_STATE } from "../constants.js";
 
 // crete a new room by host
 router.post("/createNew", authMiddleware, async (req, res) => {
@@ -17,7 +19,7 @@ router.post("/createNew", authMiddleware, async (req, res) => {
 });
 
 // lookup for existing room
-router.get("/:code/lookup", authMiddleware, async (req, res) => {
+router.get("/:code/lookup", validateCode, authMiddleware, async (req, res) => {
   try {
     const code = req.params.code;
 
@@ -35,7 +37,7 @@ router.get("/:code/lookup", authMiddleware, async (req, res) => {
 });
 
 // joining a room
-router.post("/:code/join", authMiddleware, async (req, res) => {
+router.post("/:code/join", validateCode, authMiddleware, async (req, res) => {
   try{
     const userId = req.user.id;
     const room = await getRoomByCode(req.params.code);
@@ -44,7 +46,7 @@ router.post("/:code/join", authMiddleware, async (req, res) => {
       return res.status(404).json({ message: "Room not found" });
     }
 
-    if (room.gameState !== "lobby") {
+    if (room.state !== GAME_STATE.LOBBY) {
       return res.status(400).json({ message: "Game already started" });
     }
 
