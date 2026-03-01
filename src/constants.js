@@ -16,3 +16,10 @@ export const PHASE = {
     MEETING: "meeting",
     ENDED: "ended"
 }
+
+export const GAME_CONFIG = {
+  KILL_RANGE_METRES: 8,
+  REPORT_RANGE_METRES: 8,
+  KILL_COOLDOWN_MS: 30_000,       // 30 seconds
+  MEETING_DURATION_MS: 120_000,   // 2 minutes
+};

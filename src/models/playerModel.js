@@ -16,8 +16,8 @@ const playerSchema = new mongoose.Schema(
     alive: { type: Boolean, default: true },
 
     position: {
-      x: { type: Number, default: 0 },
-      y: { type: Number, default: 0 },
+      lat: { type: Number, default: 0 },
+      lng: { type: Number, default: 0 },
     },
 
     tasksCompleted: { type: Number, default: 0 },
