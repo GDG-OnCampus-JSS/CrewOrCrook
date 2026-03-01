@@ -1,7 +1,7 @@
 import Room from "../models/roomModel.js";
 import Player from "../models/playerModel.js";
 import { assignImposter } from "../utils/assignImposter.js";
-import { PHASE, GAME_STATE, PLAYER_ROLE } from "../constants.js";
+import { PHASE, GAME_STATE, PLAYER_ROLE, GAME_CONFIG } from "../constants.js";
 import {
   deleteGameState,
   setPhase,
@@ -119,8 +119,8 @@ export default function gameSocketHandler(io, socket) {
       }
 
       const players = await Player.find({ roomId: room._id });
-      if (players.length < 2) {
-        return callback?.({ ok: false, message: "Not enough players" });
+      if (players.length < GAME_CONFIG.MIN_PLAYERS) {
+        return callback?.({ ok: false, message: `Need at least ${GAME_CONFIG.MIN_PLAYERS} players to start` });
       }
 
       await assignImposter(room._id);

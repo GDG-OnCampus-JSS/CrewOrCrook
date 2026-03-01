@@ -1,12 +1,20 @@
-import Room from"../models/roomModel.js";
+import Room from "../models/roomModel.js";
 import Player from "../models/playerModel.js";
 import generateRoomCode from "../utils/helper.js";
 import { assignImposter } from "../utils/assignImposter.js";
-import { PLAYER_ROLE} from '../constants.js';
+import { PLAYER_ROLE } from '../constants.js';
 
 //creating new room
 export async function createRoom(hostUserId) {
-  const code = generateRoomCode();
+  // Generate a unique room code (retry on collision)
+  let code;
+  let attempts = 0;
+  do {
+    code = generateRoomCode();
+    attempts++;
+    if (attempts > 10) throw new Error("Failed to generate unique room code");
+  } while (await Room.exists({ code }));
+
   const room = await Room.create({
     code,
     host: hostUserId,

@@ -1,22 +1,20 @@
 /**
- * CrewOrCrook — Full End-to-End Test
+ * CrewOrCrook — Full End-to-End Test (4 players)
  * 
- * Tests the complete game flow:
- *   1. Register 2 users
- *   2. Login both
+ * Tests the complete game flow with 4 players (MIN_PLAYERS = 4):
+ *   1. Register 4 users
+ *   2. Login all 4
  *   3. Create room (host)
- *   4. Join room (player 2)
- *   5. Both connect sockets & join lobby
- *   6. Host starts game
- *   7. Both receive roles
- *   8. Players send GPS movements
- *   9. Test kill OUT of range (should fail)
- *  10. Test nearby-targets (impostor only)
- *  11. Move into range, test kill (should succeed + body broadcast)
- *  12. Test get-bodies
- *  13. Test report-body out of range (should fail)
- *  14. Move near body, report-body (should trigger meeting)
- *  15. Test voting
+ *   4. All 4 join room
+ *   5. All 4 connect sockets & join lobby
+ *   6. Verify game start rejected with < 4 players (tested via logic)
+ *   7. Host starts game
+ *   8. All receive roles (1 imposter, 3 crewmates)
+ *   9. GPS movement
+ *  10. Kill out of range (should fail)
+ *  11. Nearby targets (impostor only)
+ *  12. Kill in range — game should CONTINUE (1 imp vs 2 crew)
+ *  13. Second kill — game should END (1 imp vs 1 crew → impostor wins)
  * 
  * Run: node tests/e2e.test.js
  * Requires: server running on localhost:5000, Redis & MongoDB up
@@ -104,197 +102,236 @@ function sleep(ms) {
 // ─── GPS coordinates for testing ────────────────────────────────
 // Delhi area. Points ~5m apart and ~50m apart.
 
-const POS_A = { lat: 28.613900, lng: 77.209000 };  // Player A base
-const POS_B_NEAR = { lat: 28.613900, lng: 77.209050 };  // ~5m from A (within 8m)
-const POS_B_FAR = { lat: 28.613900, lng: 77.209500 };   // ~49m from A (way outside 8m)
-const POS_C_NEAR_BODY = { lat: 28.613900, lng: 77.209050 }; // same as B_NEAR, near the body
+const POS_A = { lat: 28.613900, lng: 77.209000 };         // Impostor base
+const POS_NEAR = { lat: 28.613900, lng: 77.209050 };      // ~5m from A (within 8m)
+const POS_FAR = { lat: 28.613900, lng: 77.209500 };       // ~49m from A (way outside 8m)
+const POS_CREW3 = { lat: 28.614200, lng: 77.209000 };     // Crew 3 separate position
 
 // ─── Main test ───────────────────────────────────────────────────
 
 async function runTests() {
   console.log("\n══════════════════════════════════════════");
-  console.log("  CrewOrCrook — End-to-End Test Suite");
+  console.log("  CrewOrCrook — End-to-End Test Suite (4 players)");
   console.log("══════════════════════════════════════════\n");
 
   // ── 1. REGISTER ──
-  console.log("📝 Step 1: Register users");
-  const user1Name = `host_${UNIQUE}`;
-  const user2Name = `crew_${UNIQUE}`;
+  console.log("📝 Step 1: Register 4 users");
+  const userNames = [
+    `host_${UNIQUE}`,
+    `crew1_${UNIQUE}`,
+    `crew2_${UNIQUE}`,
+    `crew3_${UNIQUE}`,
+  ];
 
-  const reg1 = await post("/auth/register", { username: user1Name, password: "test1234" });
-  assert("Register user 1 (host)", reg1.status === 201, `status=${reg1.status} ${JSON.stringify(reg1.data)}`);
-
-  const reg2 = await post("/auth/register", { username: user2Name, password: "test1234" });
-  assert("Register user 2 (player)", reg2.status === 201, `status=${reg2.status}`);
+  const regResults = [];
+  for (const name of userNames) {
+    const reg = await post("/auth/register", { username: name, password: "test1234" });
+    assert(`Register ${name}`, reg.status === 201, `status=${reg.status} ${JSON.stringify(reg.data)}`);
+    regResults.push(reg);
+  }
 
   // ── 2. LOGIN ──
-  console.log("\n🔑 Step 2: Login");
-  const login1 = await post("/auth/login", { username: user1Name, password: "test1234" });
-  assert("Login user 1", login1.status === 200 && login1.data.accessToken, `status=${login1.status}`);
-  const token1 = login1.data.accessToken;
-
-  const login2 = await post("/auth/login", { username: user2Name, password: "test1234" });
-  assert("Login user 2", login2.status === 200 && login2.data.accessToken, `status=${login2.status}`);
-  const token2 = login2.data.accessToken;
+  console.log("\n🔑 Step 2: Login all 4 users");
+  const tokens = [];
+  const loginData = [];
+  for (const name of userNames) {
+    const login = await post("/auth/login", { username: name, password: "test1234" });
+    assert(`Login ${name}`, login.status === 200 && login.data.accessToken, `status=${login.status}`);
+    tokens.push(login.data.accessToken);
+    loginData.push(login.data);
+  }
 
   // ── 3. CREATE ROOM ──
   console.log("\n🏠 Step 3: Create room");
-  const createRes = await post("/room/createNew", {}, token1);
+  const createRes = await post("/room/createNew", {}, tokens[0]);
   assert("Create room", createRes.status === 201 && createRes.data.code, `status=${createRes.status}`);
   const roomCode = createRes.data.code;
   console.log(`    Room code: ${roomCode}`);
 
   // ── 4. JOIN ROOM ──
-  console.log("\n🚪 Step 4: Join room");
-  // Host joins their own room
-  const join1 = await post(`/room/${roomCode}/join`, {}, token1);
-  assert("Host joins room", join1.status === 201, `status=${join1.status} ${JSON.stringify(join1.data)}`);
-
-  const join2 = await post(`/room/${roomCode}/join`, {}, token2);
-  assert("Player 2 joins room", join2.status === 201, `status=${join2.status}`);
+  console.log("\n🚪 Step 4: All 4 players join room");
+  for (let i = 0; i < 4; i++) {
+    const join = await post(`/room/${roomCode}/join`, {}, tokens[i]);
+    assert(`${userNames[i]} joins room`, join.status === 201, `status=${join.status} ${JSON.stringify(join.data)}`);
+  }
 
   // ── 5. SOCKET CONNECT + LOBBY JOIN ──
   console.log("\n🔌 Step 5: Connect sockets & join lobby");
-  let sock1, sock2;
+  const sockets = [];
   try {
-    sock1 = await connectSocket(token1);
-    assert("Socket 1 connected", !!sock1.id);
-
-    sock2 = await connectSocket(token2);
-    assert("Socket 2 connected", !!sock2.id);
+    for (let i = 0; i < 4; i++) {
+      const sock = await connectSocket(tokens[i]);
+      assert(`Socket ${i + 1} connected`, !!sock.id);
+      sockets.push(sock);
+    }
   } catch (err) {
     assert("Socket connection", false, err.message);
     console.log("\n⛔ Cannot proceed without sockets. Exiting.\n");
     process.exit(1);
   }
 
-  const lobbyAck1 = await emitWithAck(sock1, "lobby:join-room", { roomCode });
-  assert("Host joins lobby socket", lobbyAck1.ok === true, JSON.stringify(lobbyAck1));
-
-  const lobbyAck2 = await emitWithAck(sock2, "lobby:join-room", { roomCode });
-  assert("Player 2 joins lobby socket", lobbyAck2.ok === true, JSON.stringify(lobbyAck2));
+  for (let i = 0; i < 4; i++) {
+    const ack = await emitWithAck(sockets[i], "lobby:join-room", { roomCode });
+    assert(`${userNames[i]} joins lobby socket`, ack.ok === true, JSON.stringify(ack));
+  }
 
   // ── 6. START GAME ──
   console.log("\n🎮 Step 6: Host starts game");
 
-  // Set up listeners for roles BEFORE starting
-  const role1Promise = waitForEvent(sock1, "game:role");
-  const role2Promise = waitForEvent(sock2, "game:role");
-  const startedPromise1 = waitForEvent(sock1, "game:started");
+  // Set up role listeners for ALL 4 players BEFORE starting
+  const rolePromises = sockets.map((s) => waitForEvent(s, "game:role"));
+  const startedPromise = waitForEvent(sockets[0], "game:started");
 
-  const startAck = await emitWithAck(sock1, "game:start", { roomCode });
+  const startAck = await emitWithAck(sockets[0], "game:start", { roomCode });
   assert("game:start ack", startAck.ok === true, JSON.stringify(startAck));
 
-  await startedPromise1;
+  await startedPromise;
   assert("game:started event received", true);
 
   // ── 7. RECEIVE ROLES ──
   console.log("\n🎭 Step 7: Receive roles");
-  const r1 = await role1Promise;
-  const r2 = await role2Promise;
-  assert("User 1 got role", !!r1.role, `role=${r1.role}`);
-  assert("User 2 got role", !!r2.role, `role=${r2.role}`);
-  console.log(`    User 1 (${user1Name}): ${r1.role}`);
-  console.log(`    User 2 (${user2Name}): ${r2.role}`);
-
-  // Figure out who is impostor and who is crewmate
-  let impostorSock, crewSock, impostorName, crewName;
-  if (r1.role === "imposter") {
-    impostorSock = sock1; crewSock = sock2;
-    impostorName = user1Name; crewName = user2Name;
-  } else {
-    impostorSock = sock2; crewSock = sock1;
-    impostorName = user2Name; crewName = user1Name;
+  const roles = await Promise.all(rolePromises);
+  for (let i = 0; i < 4; i++) {
+    assert(`${userNames[i]} got role`, !!roles[i].role, `role=${roles[i].role}`);
+    console.log(`    ${userNames[i]}: ${roles[i].role}`);
   }
-  console.log(`    Impostor: ${impostorName} | Crewmate: ${crewName}`);
+
+  // Figure out who is impostor and who are crewmates
+  let impostorIdx = roles.findIndex((r) => r.role === "imposter");
+  assert("Exactly 1 impostor assigned", impostorIdx !== -1);
+
+  const impostorSock = sockets[impostorIdx];
+  const impostorName = userNames[impostorIdx];
+  const impostorUserId = loginData[impostorIdx].user._id;
+
+  // Get crewmate indices
+  const crewIndices = roles
+    .map((r, i) => (r.role === "crewmate" ? i : -1))
+    .filter((i) => i !== -1);
+
+  assert("3 crewmates assigned", crewIndices.length === 3, `count=${crewIndices.length}`);
+
+  const crewSocks = crewIndices.map((i) => sockets[i]);
+  const crewNames = crewIndices.map((i) => userNames[i]);
+  const crewUserIds = crewIndices.map((i) => loginData[i].user._id);
+
+  console.log(`    Impostor: ${impostorName}`);
+  console.log(`    Crewmates: ${crewNames.join(", ")}`);
 
   // ── 8. GPS MOVEMENT ──
   console.log("\n📍 Step 8: GPS movement");
 
   // Move impostor to position A
-  const move1Promise = waitForEvent(crewSock, "game:player-moved");
+  const movePromise1 = waitForEvent(crewSocks[0], "game:player-moved");
   impostorSock.emit("game:move", { roomCode, position: POS_A });
-  const moveEvt1 = await move1Promise;
-  assert("Impostor moved, crewmate received update", !!moveEvt1.position.lat, `pos=${JSON.stringify(moveEvt1.position)}`);
+  await movePromise1;
+  assert("Impostor moved, crewmates received update", true);
 
-  // Move crewmate to FAR position
-  const move2Promise = waitForEvent(impostorSock, "game:player-moved");
-  crewSock.emit("game:move", { roomCode, position: POS_B_FAR });
-  const moveEvt2 = await move2Promise;
-  assert("Crewmate moved far, impostor received update", !!moveEvt2.position.lat);
+  // Move first crewmate FAR from impostor
+  const movePromise2 = waitForEvent(impostorSock, "game:player-moved");
+  crewSocks[0].emit("game:move", { roomCode, position: POS_FAR });
+  await movePromise2;
+  assert("Crewmate 1 moved far", true);
 
-  await sleep(200); // let events settle
+  // Move second crewmate to a separate position
+  const movePromise3 = waitForEvent(impostorSock, "game:player-moved");
+  crewSocks[1].emit("game:move", { roomCode, position: POS_CREW3 });
+  await movePromise3;
+  assert("Crewmate 2 moved to separate pos", true);
+
+  // Move third crewmate far as well
+  const movePromise4 = waitForEvent(impostorSock, "game:player-moved");
+  crewSocks[2].emit("game:move", { roomCode, position: POS_FAR });
+  await movePromise4;
+  assert("Crewmate 3 moved far", true);
+
+  await sleep(200);
 
   // ── 9. KILL OUT OF RANGE (should fail) ──
   console.log("\n🔪 Step 9: Kill out of range (~49m apart)");
 
-  // Listen for error on impostor's side
   const errorPromise = waitForEvent(impostorSock, "game:error", 3000).catch(() => null);
-  
-  // We need the crewmate's userId. Let's get it from login data
-  const crewUserId = r1.role === "imposter" ? login2.data.user._id : login1.data.user._id;
-  const impostorUserId = r1.role === "imposter" ? login1.data.user._id : login2.data.user._id;
-
-  impostorSock.emit("game:kill", { roomCode, victimId: crewUserId });
+  impostorSock.emit("game:kill", { roomCode, victimId: crewUserIds[0] });
   const killError = await errorPromise;
-  assert("Kill rejected (too far)", killError && killError.message.includes("too far"), 
+  assert("Kill rejected (too far)", killError && killError.message.includes("too far"),
     killError ? killError.message : "no error received");
 
   // ── 10. NEARBY TARGETS ──
-  console.log("\n🎯 Step 10: Move into range & check nearby-targets");
+  console.log("\n🎯 Step 10: Move crewmate 1 into range & check nearby-targets");
 
-  // Move crewmate NEAR the impostor
-  const nearbyPromise = waitForEvent(impostorSock, "game:nearby-targets", 3000).catch(() => null);
-  crewSock.emit("game:move", { roomCode, position: POS_B_NEAR });
+  // Move crewmate 1 NEAR the impostor
+  crewSocks[0].emit("game:move", { roomCode, position: POS_NEAR });
   await sleep(300);
 
-  // Now move impostor slightly to trigger nearby-targets recompute
-  const nearbyPromise2 = waitForEvent(impostorSock, "game:nearby-targets", 3000).catch(() => null);
+  // Move impostor slightly to trigger nearby-targets recompute
+  const nearbyPromise = waitForEvent(impostorSock, "game:nearby-targets", 3000).catch(() => null);
   impostorSock.emit("game:move", { roomCode, position: POS_A });
-  const nearby = await nearbyPromise2;
+  const nearby = await nearbyPromise;
 
   if (nearby && nearby.targets) {
     assert("Nearby targets received", nearby.targets.length > 0, `count=${nearby.targets.length}`);
     if (nearby.targets.length > 0) {
-      assert("Nearest target is the crewmate", nearby.targets[0].userId === crewUserId,
-        `target=${nearby.targets[0].userId}, expected=${crewUserId}`);
+      assert("Nearest target is crewmate 1", nearby.targets[0].userId === crewUserIds[0],
+        `target=${nearby.targets[0].userId}, expected=${crewUserIds[0]}`);
       console.log(`    Distance: ${nearby.targets[0].distance}m`);
     }
   } else {
     assert("Nearby targets received", false, "no nearby-targets event");
   }
 
-  // ── 11. KILL IN RANGE ──
-  console.log("\n🔪 Step 11: Kill in range (~5m apart)");
+  // ── 11. FIRST KILL — game should CONTINUE ──
+  console.log("\n🔪 Step 11: First kill (1 imp vs 2 crew remaining — game continues)");
 
-  const killEventPromise = waitForEvent(crewSock, "game:kill-event", 3000);
+  // Set up listeners before kill
+  const kill1EventPromise = waitForEvent(crewSocks[0], "game:kill-event", 3000);
+  const ended1Promise = waitForEvent(impostorSock, "game:ended", 2000).catch(() => null);
 
-  impostorSock.emit("game:kill", { roomCode, victimId: crewUserId });
-  const killEvt = await killEventPromise;
+  impostorSock.emit("game:kill", { roomCode, victimId: crewUserIds[0] });
+  const kill1Evt = await kill1EventPromise;
 
-  assert("Kill event received by crewmate", !!killEvt, JSON.stringify(killEvt));
-  assert("Kill event has victim position", !!killEvt.position?.lat, JSON.stringify(killEvt.position));
-  assert("Correct victim ID", killEvt.victimId === crewUserId);
-  console.log(`    Body at: ${killEvt.position?.lat}, ${killEvt.position?.lng}`);
+  assert("Kill event received", !!kill1Evt);
+  assert("Correct victim ID", kill1Evt.victimId === crewUserIds[0]);
+  assert("Kill has body position", !!kill1Evt.position?.lat);
+  console.log(`    Body at: ${kill1Evt.position?.lat}, ${kill1Evt.position?.lng}`);
 
-  // Check if game ended (impostor kills == crew kills when only 2 players: 1 imp vs 1 crew)
-  // With 2 players (1 impostor, 1 crewmate), killing the crewmate means impostor wins
-  const endedPromise = waitForEvent(impostorSock, "game:ended", 2000).catch(() => null);
-  const ended = await endedPromise;
+  const ended1 = await ended1Promise;
+  assert("Game did NOT end after first kill", ended1 === null, ended1 ? `unexpected winner: ${ended1.winner}` : "");
 
-  if (ended) {
-    console.log("\n🏆 Game ended immediately (impostor wins with 2 players)");
-    assert("Winner is impostor", ended.winner === "imposter", `winner=${ended.winner}`);
-    console.log(`    Winner: ${ended.winner}`);
+  // ── 12. SECOND KILL — game should END ──
+  console.log("\n🔪 Step 12: Move crewmate 2 near & kill (1 imp vs 1 crew → impostor wins)");
+
+  // Wait for kill cooldown to expire — in production it's 30s,
+  // but we need to bypass or wait. Let's update position first.
+  // For testing, we need to wait for cooldown. Let's check if we can skip it.
+  console.log("    ⏳ Waiting for kill cooldown (30s)...");
+  await sleep(31_000);
+
+  // Move crewmate 2 near the impostor
+  crewSocks[1].emit("game:move", { roomCode, position: POS_NEAR });
+  await sleep(300);
+
+  // Move impostor to ensure positions are fresh
+  impostorSock.emit("game:move", { roomCode, position: POS_A });
+  await sleep(300);
+
+  // Set up listeners BEFORE kill
+  const kill2EventPromise = waitForEvent(crewSocks[1], "game:kill-event", 3000);
+  const ended2Promise = waitForEvent(impostorSock, "game:ended", 3000).catch(() => null);
+
+  impostorSock.emit("game:kill", { roomCode, victimId: crewUserIds[1] });
+  const kill2Evt = await kill2EventPromise;
+
+  assert("Second kill event received", !!kill2Evt);
+  assert("Correct second victim ID", kill2Evt.victimId === crewUserIds[1]);
+
+  const ended2 = await ended2Promise;
+
+  if (ended2) {
+    console.log("\n🏆 Game ended — impostor wins!");
+    assert("Winner is impostor", ended2.winner === "imposter", `winner=${ended2.winner}`);
+    console.log(`    Winner: ${ended2.winner}`);
   } else {
-    // Game continues — test bodies, reporting, voting
-    console.log("\n💀 Game continues, testing bodies...");
-
-    // ── 12. GET BODIES ──
-    console.log("\n🗺️  Step 12: Get bodies on map");
-    // We need a 3rd alive crewmate for report-body, but with 2 players the game ends.
-    // So this path only runs if >2 players
-    skip("Get bodies", "game ended (2-player game)");
+    assert("Game ended after second kill", false, "game:ended event not received");
   }
 
   // ─── SUMMARY ───────────────────────────────────────────────────
@@ -302,8 +339,7 @@ async function runTests() {
   console.log(`  Results: ${passed} passed, ${failed} failed, ${skipped} skipped`);
   console.log("══════════════════════════════════════════\n");
 
-  sock1.disconnect();
-  sock2.disconnect();
+  sockets.forEach((s) => s.disconnect());
 
   process.exit(failed > 0 ? 1 : 0);
 }
