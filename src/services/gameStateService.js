@@ -70,7 +70,7 @@ export async function initGameState(roomCode, players) {
     bodies: [],
 
     tasks: {
-      total: 30,
+      total: 25,
       completed: 0,
       perPlayer: {},
     },

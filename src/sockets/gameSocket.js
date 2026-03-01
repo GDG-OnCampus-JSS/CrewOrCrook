@@ -316,6 +316,13 @@ export default function gameSocketHandler(io, socket) {
         io.to(roomCode).emit("game:ended", {
           winner: PLAYER_ROLE.CREWMATE,
         });
+
+        // Cleanup — mark game as finished
+        await deleteGameState(roomCode);
+        await Room.findOneAndUpdate(
+          { code: roomCode },
+          { state: GAME_STATE.FINISHED }
+        );
       }
 
       callback?.({ ok: true });
