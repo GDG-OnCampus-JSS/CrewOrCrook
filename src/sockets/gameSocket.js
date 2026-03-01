@@ -3,7 +3,6 @@ import Player from "../models/playerModel.js";
 import { assignImposter } from "../utils/assignImposter.js";
 import { PHASE, GAME_STATE, PLAYER_ROLE, GAME_CONFIG } from "../constants.js";
 import {
-  deleteGameState,
   setPhase,
   getPhase,
   initGameState,
@@ -19,6 +18,7 @@ import {
   reportBody,
   getBodies,
   getNearbyTargets,
+  finishGame,
 } from "../services/gameStateService.js";
 
 
@@ -84,11 +84,7 @@ export default function gameSocketHandler(io, socket) {
         });
 
         // Cleanup
-        await deleteGameState(roomCode);
-        await Room.findOneAndUpdate(
-          { code: roomCode },
-          { state: GAME_STATE.FINISHED }
-        );
+        await finishGame(roomCode);
       }
     } catch (err) {
       console.error("game:kill error:", err.message);
@@ -224,6 +220,8 @@ export default function gameSocketHandler(io, socket) {
           io.to(roomCode).emit("game:ended", {
             winner: result.winner,
           });
+
+          await finishGame(roomCode);
         } else {
           io.to(roomCode).emit("game:freeplay-resumed");
         }
@@ -251,6 +249,8 @@ export default function gameSocketHandler(io, socket) {
         io.to(roomCode).emit("game:ended", {
           winner: result.winner,
         });
+
+        await finishGame(roomCode);
       } else {
         io.to(roomCode).emit("game:freeplay-resumed");
       }
@@ -317,12 +317,8 @@ export default function gameSocketHandler(io, socket) {
           winner: PLAYER_ROLE.CREWMATE,
         });
 
-        // Cleanup — mark game as finished
-        await deleteGameState(roomCode);
-        await Room.findOneAndUpdate(
-          { code: roomCode },
-          { state: GAME_STATE.FINISHED }
-        );
+        // Cleanup
+        await finishGame(roomCode);
       }
 
       callback?.({ ok: true });

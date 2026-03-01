@@ -41,31 +41,31 @@ Below are the HTTP endpoints necessary before entering a socket session.
 
 ---
 
-## 3. Lobby & Room Management API (REST)
+## 3. Room Management API (REST)
 
-Before creating a Socket connection, a player either creates a room or joins an existing one via REST APIs.
+Before joining via Socket, a player either creates a room or looks up an existing one via REST APIs. **Joining a room is handled entirely through Socket.IO** (see Section 5).
 
 #### 1. Create a Room
 - **URL**: `POST /room/createNew`
 - **Headers**: `Authorization: Bearer <accessToken>`
 - **Response** `201 Created`: Returns `room` object including `code` (The 6-char lobby code).
 
-#### 2. Join a Room
-- **URL**: `POST /room/<code>/join` (e.g., `/room/ABCDEF/join`)
+#### 2. Get Available Rooms
+- **URL**: `GET /room/available`
 - **Headers**: `Authorization: Bearer <accessToken>`
-- **Response** `201 Created`: `{ "room": { ... }, "player": { "_id": "...", "userId": "..." } }`
-- **Errors**: `400 Game already started`, `409 Room is full`, `400 User already in room`.
+- **Response** `200 OK`: Returns an array of rooms that are in LOBBY state and not full. Each room includes `code`, `host` (with `username`), `players` (ObjectId array), `maxPlayers`, and `createdAt`.
+- **Use case**: Display a "Browse Rooms" list so players can pick a room to join.
 
 #### 3. Room Lookup
 - **URL**: `GET /room/<code>/lookup`
 - **Headers**: `Authorization: Bearer <accessToken>`
-- **Response** `200 OK`: Returns the current `room` state and players list.
+- **Response** `200 OK`: Returns the current `room` state and populated players list.
 
 ---
 
 ## 4. Socket.IO Connection
 
-Once the user has joined a room via REST, you establish a WebSocket connection.
+Once the user has a room code (from creating or looking up a room), you establish a WebSocket connection to **join the room**.
 
 **Socket.IO URL**: `ws://<SERVER_IP>:<PORT>`
 
@@ -92,9 +92,10 @@ The backend has two logical namespaces divided into event prefixes:
 ### Emitting to Server
 
 #### `lobby:join-room`
-Call this immediately after connecting to the Socket to attach your socket to the room's multicast group.
+Call this immediately after connecting to the Socket. This is the **unified join mechanism** — it handles both player registration in the database AND attaching your socket to the room's multicast group. No separate REST call is needed.
 - **Payload**: `{ "roomCode": "ABCDEF" }`
-- **Acknowledgment Callback**: `(response) => { ok: Boolean, message?: String, roomCode?: String }`
+- **Acknowledgment Callback**: `(response) => { ok: Boolean, message?: String, roomCode?: String, player?: Object }`
+- **Errors**: `Room not found`, `Game already started`, `Room is full`
 
 ### Listening from Server
 
@@ -249,8 +250,8 @@ You should aggressively listen for the `game:error` event to handle bad requests
 
 1. **Perform Login**: `POST /auth/login` -> Save `accessToken`.
 2. **Setup Socket**: Initialize `socket.io` with `auth = { token }`.
-3. **Room Preparation**: Use `POST /room/createNew` or `POST /room/<code>/join`.
-4. **Join Realtime Lobby**: Emit `lobby:join-room` with `roomCode`.
+3. **Create or Lookup Room**: Use `POST /room/createNew` or `GET /room/<code>/lookup`.
+4. **Join Room via Socket**: Emit `lobby:join-room` with `roomCode`. This registers the player AND joins the real-time lobby in one step.
 5. **Wait for Host**: Host UI shows start button. Client UI shows waiting spinner.
 6. **Host Starts**: Emit `game:start`. All players receive `game:started` & `game:role`.
 7. **Freeplay Loop**:

@@ -151,15 +151,8 @@ async function runTests() {
   const roomCode = createRes.data.code;
   console.log(`    Room code: ${roomCode}`);
 
-  // ── 4. JOIN ROOM ──
-  console.log("\n🚪 Step 4: All 4 players join room");
-  for (let i = 0; i < 4; i++) {
-    const join = await post(`/room/${roomCode}/join`, {}, tokens[i]);
-    assert(`${userNames[i]} joins room`, join.status === 201, `status=${join.status} ${JSON.stringify(join.data)}`);
-  }
-
-  // ── 5. SOCKET CONNECT + LOBBY JOIN ──
-  console.log("\n🔌 Step 5: Connect sockets & join lobby");
+  // ── 4. SOCKET CONNECT + JOIN ROOM (unified) ──
+  console.log("\n🔌 Step 4: Connect sockets & join room via lobby:join-room");
   const sockets = [];
   try {
     for (let i = 0; i < 4; i++) {
@@ -175,11 +168,11 @@ async function runTests() {
 
   for (let i = 0; i < 4; i++) {
     const ack = await emitWithAck(sockets[i], "lobby:join-room", { roomCode });
-    assert(`${userNames[i]} joins lobby socket`, ack.ok === true, JSON.stringify(ack));
+    assert(`${userNames[i]} joins room via socket`, ack.ok === true, JSON.stringify(ack));
   }
 
   // ── 6. START GAME ──
-  console.log("\n🎮 Step 6: Host starts game");
+  console.log("\n🎮 Step 5: Host starts game");
 
   // Set up role listeners for ALL 4 players BEFORE starting
   const rolePromises = sockets.map((s) => waitForEvent(s, "game:role"));
@@ -192,7 +185,7 @@ async function runTests() {
   assert("game:started event received", true);
 
   // ── 7. RECEIVE ROLES ──
-  console.log("\n🎭 Step 7: Receive roles");
+  console.log("\n🎭 Step 6: Receive roles");
   const roles = await Promise.all(rolePromises);
   for (let i = 0; i < 4; i++) {
     assert(`${userNames[i]} got role`, !!roles[i].role, `role=${roles[i].role}`);
@@ -222,7 +215,7 @@ async function runTests() {
   console.log(`    Crewmates: ${crewNames.join(", ")}`);
 
   // ── 8. GPS MOVEMENT ──
-  console.log("\n📍 Step 8: GPS movement");
+  console.log("\n📍 Step 7: GPS movement");
 
   // Move impostor to position A
   const movePromise1 = waitForEvent(crewSocks[0], "game:player-moved");
@@ -251,7 +244,7 @@ async function runTests() {
   await sleep(200);
 
   // ── 9. KILL OUT OF RANGE (should fail) ──
-  console.log("\n🔪 Step 9: Kill out of range (~49m apart)");
+  console.log("\n🔪 Step 8: Kill out of range (~49m apart)");
 
   const errorPromise = waitForEvent(impostorSock, "game:error", 3000).catch(() => null);
   impostorSock.emit("game:kill", { roomCode, victimId: crewUserIds[0] });
@@ -260,7 +253,7 @@ async function runTests() {
     killError ? killError.message : "no error received");
 
   // ── 10. NEARBY TARGETS ──
-  console.log("\n🎯 Step 10: Move crewmate 1 into range & check nearby-targets");
+  console.log("\n🎯 Step 9: Move crewmate 1 into range & check nearby-targets");
 
   // Move crewmate 1 NEAR the impostor
   crewSocks[0].emit("game:move", { roomCode, position: POS_NEAR });
@@ -283,7 +276,7 @@ async function runTests() {
   }
 
   // ── 11. FIRST KILL — game should CONTINUE ──
-  console.log("\n🔪 Step 11: First kill (1 imp vs 2 crew remaining — game continues)");
+  console.log("\n🔪 Step 10: First kill (1 imp vs 2 crew remaining — game continues)");
 
   // Set up listeners before kill
   const kill1EventPromise = waitForEvent(crewSocks[0], "game:kill-event", 3000);
@@ -301,7 +294,7 @@ async function runTests() {
   assert("Game did NOT end after first kill", ended1 === null, ended1 ? `unexpected winner: ${ended1.winner}` : "");
 
   // ── 12. REPORT BODY — OUT OF RANGE (should fail) ──
-  console.log("\n🔍 Step 12: Report body out of range (~49m away)");
+  console.log("\n🔍 Step 11: Report body out of range (~49m away)");
 
   // Crewmate 2 is at POS_CREW3 (~33m from the body at POS_NEAR).
   // The body was created at the victim's position (POS_NEAR ≈ same as POS_A).
@@ -317,7 +310,7 @@ async function runTests() {
   }
 
   // ── 13. REPORT BODY — IN RANGE (should trigger meeting) ──
-  console.log("\n🔍 Step 13: Report body in range (crewmate 3 walks to body)");
+  console.log("\n🔍 Step 12: Report body in range (crewmate 3 walks to body)");
 
   // Move crewmate 3 close to the body position (body is at POS_NEAR)
   const moveCrew3Promise = waitForEvent(impostorSock, "game:player-moved");
@@ -349,7 +342,7 @@ async function runTests() {
   console.log(`    Body position: ${JSON.stringify(meetingEvents[0]?.bodyPosition)}`);
 
   // ── 14. VOTE — ALL SKIP (resolve meeting, resume freeplay) ──
-  console.log("\n🗳️  Step 14: All alive players vote to skip");
+  console.log("\n🗳️  Step 13: All alive players vote to skip");
 
   // 3 alive players: impostor, crewmate 2, crewmate 3
   const aliveSockets = [impostorSock, crewSocks[1], crewSocks[2]];
@@ -378,7 +371,7 @@ async function runTests() {
   console.log("    Meeting resolved — back to freeplay");
 
   // ── 15. VERIFY BODIES CLEARED ──
-  console.log("\n🧹 Step 15: Verify bodies cleared after meeting");
+  console.log("\n🧹 Step 14: Verify bodies cleared after meeting");
 
   const bodiesAck = await emitWithAck(impostorSock, "game:get-bodies", { roomCode });
   assert("get-bodies returned ok", bodiesAck.ok === true, bodiesAck.message || "");
@@ -386,7 +379,7 @@ async function runTests() {
     `count=${bodiesAck.bodies?.length}`);
 
   // ── 16. SECOND KILL — game should END ──
-  console.log("\n🔪 Step 16: Move crewmate 2 near & kill (1 imp vs 1 crew → impostor wins)");
+  console.log("\n🔪 Step 15: Move crewmate 2 near & kill (1 imp vs 1 crew → impostor wins)");
 
   // Kill cooldown should have been reset when we entered the meeting,
   // but let's wait to be safe since the cooldown may still be active
@@ -457,20 +450,15 @@ async function runVotingTests() {
     vloginData.push(login.data);
   }
 
-  // ── V2. CREATE & JOIN ROOM ──
-  console.log("\n🏠 V-Step 2: Create room & join");
+  // ── V2. CREATE ROOM ──
+  console.log("\n🏠 V-Step 2: Create room");
   const cr = await post("/room/createNew", {}, vtokens[0]);
   assert("Create room", cr.status === 201 && cr.data.code, `status=${cr.status}`);
   const vRoomCode = cr.data.code;
   console.log(`    Room code: ${vRoomCode}`);
 
-  for (let i = 0; i < 4; i++) {
-    const join = await post(`/room/${vRoomCode}/join`, {}, vtokens[i]);
-    assert(`${names[i]} joins room`, join.status === 201, `status=${join.status}`);
-  }
-
-  // ── V3. SOCKET CONNECT + LOBBY JOIN ──
-  console.log("\n🔌 V-Step 3: Connect sockets & join lobby");
+  // ── V3. SOCKET CONNECT + JOIN ROOM (unified) ──
+  console.log("\n🔌 V-Step 3: Connect sockets & join room via lobby:join-room");
   const vsocks = [];
   for (let i = 0; i < 4; i++) {
     const sock = await connectSocket(vtokens[i]);
@@ -480,7 +468,7 @@ async function runVotingTests() {
 
   for (let i = 0; i < 4; i++) {
     const ack = await emitWithAck(vsocks[i], "lobby:join-room", { roomCode: vRoomCode });
-    assert(`${names[i]} joins lobby socket`, ack.ok === true, JSON.stringify(ack));
+    assert(`${names[i]} joins room via socket`, ack.ok === true, JSON.stringify(ack));
   }
 
   // ── V4. START GAME & RECEIVE ROLES ──
@@ -689,20 +677,15 @@ async function runTaskTests() {
     tLoginData.push(login.data);
   }
 
-  // ── T2. CREATE ROOM & ALL 6 JOIN ──
-  console.log("\n🏠 T-Step 2: Create room & all 6 join");
+  // ── T2. CREATE ROOM ──
+  console.log("\n🏠 T-Step 2: Create room");
   const tCr = await post("/room/createNew", {}, tTokens[0]);
   assert("Create room", tCr.status === 201 && tCr.data.code, `status=${tCr.status}`);
   const tRoomCode = tCr.data.code;
   console.log(`    Room code: ${tRoomCode}`);
 
-  for (let i = 0; i < PLAYER_COUNT; i++) {
-    const join = await post(`/room/${tRoomCode}/join`, {}, tTokens[i]);
-    assert(`${tNames[i]} joins room`, join.status === 201, `status=${join.status} ${JSON.stringify(join.data)}`);
-  }
-
-  // ── T3. SOCKET CONNECT + LOBBY JOIN ──
-  console.log("\n🔌 T-Step 3: Connect sockets & join lobby");
+  // ── T3. SOCKET CONNECT + JOIN ROOM (unified) ──
+  console.log("\n🔌 T-Step 3: Connect sockets & join room via lobby:join-room");
   const tSocks = [];
   for (let i = 0; i < PLAYER_COUNT; i++) {
     const sock = await connectSocket(tTokens[i]);
@@ -712,7 +695,7 @@ async function runTaskTests() {
 
   for (let i = 0; i < PLAYER_COUNT; i++) {
     const ack = await emitWithAck(tSocks[i], "lobby:join-room", { roomCode: tRoomCode });
-    assert(`${tNames[i]} joins lobby socket`, ack.ok === true, JSON.stringify(ack));
+    assert(`${tNames[i]} joins room via socket`, ack.ok === true, JSON.stringify(ack));
   }
 
   // ── T4. START GAME & RECEIVE ROLES ──

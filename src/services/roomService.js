@@ -2,7 +2,7 @@ import Room from "../models/roomModel.js";
 import Player from "../models/playerModel.js";
 import generateRoomCode from "../utils/helper.js";
 import { assignImposter } from "../utils/assignImposter.js";
-import { PLAYER_ROLE } from '../constants.js';
+import { PLAYER_ROLE, GAME_STATE } from '../constants.js';
 
 //creating new room
 export async function createRoom(hostUserId) {
@@ -23,9 +23,20 @@ export async function createRoom(hostUserId) {
 }
 
 
-//get room - player
+// get room by code (no populate — players array of ObjectIds is sufficient for length checks)
 export async function getRoomByCode(code) {
-  return Room.findOne({ code }).populate("players");
+  return Room.findOne({ code });
+}
+
+
+// get all rooms in lobby state that are not full
+export async function getAvailableRooms() {
+  return Room.find({ state: GAME_STATE.LOBBY })
+    .where("$expr")
+    .equals({ $lt: [{ $size: "$players" }, "$maxPlayers"] })
+    .select("code host players maxPlayers createdAt")
+    .populate("host", "username")
+    .lean();
 }
 
 
@@ -44,3 +55,4 @@ export async function addPlayerToRoom({ room, userId, socketId, role = PLAYER_RO
 
   return player;
 }
+

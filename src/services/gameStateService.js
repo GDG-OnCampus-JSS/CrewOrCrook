@@ -1,8 +1,12 @@
 import redisClient from "../redis/redisClient.js";
+import Room from "../models/roomModel.js";
 import { GAME_STATE, PHASE, PLAYER_ROLE, GAME_CONFIG } from "../constants.js";
 import { isWithinRange, haversineDistance } from "../utils/locationUtils.js";
 
 const gameKey = (roomCode) => `game:${roomCode}`;
+
+// Safety TTL: auto-expire game state after 2 hours even if cleanup fails
+const GAME_STATE_TTL_SECONDS = 2 * 60 * 60;
 
 // ─── Phase helpers ───────────────────────────────────────────────
 
@@ -19,7 +23,7 @@ export async function setPhase(roomCode, nextPhase) {
   const state = JSON.parse(raw);
   state.phase = nextPhase;
 
-  await redisClient.set(gameKey(roomCode), JSON.stringify(state));
+  await saveGameState(roomCode, state);
   return state.phase;
 }
 
@@ -37,11 +41,23 @@ export async function getGameStateSafe(roomCode) {
 }
 
 export async function saveGameState(roomCode, state) {
-  await redisClient.set(gameKey(roomCode), JSON.stringify(state));
+  await redisClient.set(gameKey(roomCode), JSON.stringify(state), "EX", GAME_STATE_TTL_SECONDS);
 }
 
 export async function deleteGameState(roomCode) {
   await redisClient.del(gameKey(roomCode));
+}
+
+/**
+ * Centralized game-over cleanup: delete Redis state + mark Room as FINISHED.
+ * Call this from EVERY code path that emits game:ended.
+ */
+export async function finishGame(roomCode) {
+  await deleteGameState(roomCode);
+  await Room.findOneAndUpdate(
+    { code: roomCode },
+    { state: GAME_STATE.FINISHED }
+  );
 }
 
 // ─── Timers ──────────────────────────────────────────────────────
@@ -107,7 +123,7 @@ export async function initGameState(roomCode, players) {
     state.tasks.perPlayer[uid] = 0;
   }
 
-  await redisClient.set(gameKey(roomCode), JSON.stringify(state));
+  await redisClient.set(gameKey(roomCode), JSON.stringify(state), "EX", GAME_STATE_TTL_SECONDS);
 
   return state;
 }
@@ -140,7 +156,7 @@ export async function updatePlayerPosition(roomCode, userId, position) {
 
   player.position = { lat: position.lat, lng: position.lng };
 
-  await redisClient.set(key, JSON.stringify(state));
+  await saveGameState(roomCode, state);
   return player;
 }
 
@@ -245,7 +261,7 @@ export async function killPlayer(roomCode, killerUserId, victimUserId) {
   if (result.ended) {
     state.phase = PHASE.ENDED;
     state.winner = result.winner;
-    await redisClient.set(key, JSON.stringify(state));
+    await saveGameState(roomCode, state);
 
     return {
       ended: true,
@@ -255,7 +271,7 @@ export async function killPlayer(roomCode, killerUserId, victimUserId) {
     };
   }
 
-  await redisClient.set(key, JSON.stringify(state));
+  await saveGameState(roomCode, state);
 
   return {
     ended: false,
@@ -509,17 +525,3 @@ export async function getMeetingMessages(roomCode) {
   return state.chat || [];
 }
 
-// ─── End game ────────────────────────────────────────────────────
-
-export async function endGame(roomCode, winner) {
-  const key = gameKey(roomCode);
-  const raw = await redisClient.get(key);
-  if (!raw) throw new Error("Game state not found");
-
-  const state = JSON.parse(raw);
-  state.phase = PHASE.ENDED;
-  state.winner = winner;
-
-  await redisClient.set(key, JSON.stringify(state));
-  return state;
-}

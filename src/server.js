@@ -8,7 +8,7 @@ import cors from "cors";
 
 import lobbySocketHandler from "./sockets/lobbySocket.js";
 import gameSocketHandler from "./sockets/gameSocket.js";
-import { getGameState, resolveVoting, isTimerExpired } from "./services/gameStateService.js";
+import { getGameState, resolveVoting, isTimerExpired, finishGame } from "./services/gameStateService.js";
 
 import roomRoutes from "./routes/roomRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
@@ -53,7 +53,7 @@ app.use("/reAuth", refreshRoutes);
 
 //normal and protected route for testing
 app.get("/", (req, res) => {
-  res.json({ok: true, message: "CrewOrCrook backend is running"});
+  res.json({ ok: true, message: "CrewOrCrook backend is running" });
 });
 app.get("/protected", authMiddleware, (req, res) => {
   res.json({ ok: true, user: req.user });
@@ -127,6 +127,8 @@ setInterval(async () => {
           io.to(roomCode).emit("game:ended", {
             winner: result.winner
           });
+
+          await finishGame(roomCode);
         } else {
           io.to(roomCode).emit("game:freeplay-resumed");
         }
